@@ -1300,4 +1300,378 @@ function testChopWake(x,location,reverselogic)
     end
 end
 
+"Removes the optional argument strings/objects from the input string."
+function cleanstring(string; removethese = [
+        "\"", "/","-",":"," "
+    ], 
+    removemore = []
+)
+    newstring = string
+    for removeme in vcat(removethese, removemore)
+        newstring = replace(newstring, removeme => "")
+    end
+    return newstring
+end
+
+"Writes the main rotor file.
+
+Note that `bladefilename` is the name of a file in the same `/rotors/` directory."
+function writeMainRotor(filename, filepath, Rtip, Rhub, nblades, bladefilename)
+    properties = [
+        "property",
+        "Rtip",
+        "Rhub",
+        "B",
+        "blade"
+    ]
+    values = [
+        "file",
+        Rtip,
+        Rhub,
+        nblades,
+        bladefilename
+    ]
+    description = [
+        "description",
+        "(m) Radius of blade tip",
+        "(m) Radius of hub",
+        "Number of blades",
+        "Blade file"
+    ]
+
+    writedlm(joinpath(filepath, filename), [properties values description], ',')
+    
+end
+
+"Writes a blade rotor definition file provided the following file names and values."
+function writeBlade(filename, filepath, chorddist, pitchdist, sweepdist, heightdist, airfoilindex, splineorder, splinesmoothing)
+    property = [
+        "property",
+        "chorddist",
+        "pitchdist",
+        "sweepdist",
+        "heightdist",
+        "airfoil_files",
+        "spl_k",
+        "spl_s"
+    ]
+    file = [
+        "file",
+        chorddist,
+        pitchdist,
+        sweepdist,
+        heightdist,
+        airfoilindex,
+        splineorder,
+        splinesmoothing
+    ]
+    description = [
+        "description",
+        "Chord distribution",
+        "Pitch distribution",
+        "LE sweep distribution",
+        "LE height distribution",
+        "Airfoil distribution",
+        "Spline order",
+        "Spline smoothing"
+    ]
+
+    writedlm(joinpath(filepath, filename), [property file description], ',')
+        
+end
+
+"Writes chord file provided absolute units.
+
+* if Rtip and/or Rhub airfoils are not provided, they are assumed to be equal to their adjacent provided airfoil."
+function writeChord(filename, filepath, r, chord, Rtip, Rhub; addHubTip = false)
+    if r[1] < Rhub; throw("radial station requested beyond hub"); end
+    if r[end] > Rtip; throw("radial station requested beyond tip"); end
+    if addHubTip
+        if r[1] > Rhub; r = vcat(Rhub, r); chord = vcat(chord[1], chord); end
+        if r[end] < Rtip; r = vcat(r, Rtip); chord = vcat(chord, chord[end]); end
+    end
+    
+    rR = r ./ Rtip
+    chordR = chord ./ Rtip
+    rRscaled = scale01(rR) # scale from 0 to 1, consistent with FLOWUnsteady protocol
+
+    open(joinpath(filepath, filename), "w") do io
+        println(io, "r/R,c/R")
+        writedlm(io, [rRscaled chordR],',')
+    end
+end
+
+"Writes twist file provided absolute units.
+
+* if Rtip and/or Rhub airfoils are not provided, they are assumed to be equal to their adjacent provided airfoil."
+function writeTwist(filename, filepath, r, twist, Rtip, Rhub; addHubTip = false)
+    if r[1] < Rhub; throw("radial station requested beyond hub"); end
+    if r[end] > Rtip; throw("radial station requested beyond tip"); end
+    if addHubTip
+        if r[1] > Rhub; r = vcat(Rhub, r); twist = vcat(twist[1], twist); end
+        if r[end] < Rtip; r = vcat(r, Rtip); twist = vcat(twist, twist[end]); end
+    end
+
+    rR = r ./ Rtip
+    rRscaled = scale01(rR) # scale from 0 to 1, consistent with FLOWUnsteady protocol
+
+    open(joinpath(filepath, filename), "w") do io
+        println(io, "r/R,twist [deg]")
+        writedlm(io, [rRscaled twist],',')
+    end
+end
+
+"Writes the rotor height distribution file. 
+
+* `zle` is a vector of leading edge z coordinates.
+
+"
+function writeHeight(filename, filepath, r, zle, Rtip, Rhub; addHubTip = false)
+    if r[1] < Rhub; throw("radial station requested beyond hub"); end
+    if r[end] > Rtip; throw("radial station requested beyond tip"); end
+    if addHubTip
+        if r[1] > Rhub; r = vcat(Rhub, r); zle = vcat(zle[1], zle); end
+        if r[end] < Rtip; r = vcat(r, Rtip); zle = vcat(zle, zle[end]); end
+    end
+
+    rR = r ./ Rtip
+    zleR = zle ./ Rtip
+    rRscaled = scale01(rR) # scale from 0 to 1, consistent with FLOWUnsteady protocol
+
+    open(joinpath(filepath, filename), "w") do io
+        println(io, "r/R,zle/R")
+        writedlm(io, [rRscaled zleR],',')
+    end
+end
+
+"Writes the rotor sweep distribution file. 
+
+* `yle` is a vector of leading edge y coordinates.
+
+"
+function writeSweep(filename, filepath, r, yle, Rtip, Rhub; addHubTip = false)
+    if r[1] < Rhub; throw("radial station requested beyond hub"); end
+    if r[end] > Rtip; throw("radial station requested beyond tip"); end
+    if addHubTip # add sections on the hub and tip 
+        if r[1] > Rhub; r = vcat(Rhub, r); yle = vcat(yle[1], yle); end
+        if r[end] < Rtip; r = vcat(r, Rtip); yle = vcat(yle, yle[end]); end
+    end
+    
+    rR = r ./ Rtip
+    yleR = yle ./ Rtip
+    rRscaled = scale01(rR) # scale from 0 to 1, consistent with FLOWUnsteady protocol
+
+    open(joinpath(filepath, filename), "w") do io
+        println(io, "r/R,yle/R")
+        writedlm(io, [rRscaled yleR],',')
+    end
+end
+
+"Writes the airfoil index file. 
+
+* `contours` : vector of strings, where each string is the name of a `.csv` file containing x/y contour data for the airfoil at each radial section
+* `polars` : vector of strings, where each string is the name of a `.csv` file containing cl/cd/cm aerodynamic coefficient data for the airfoil at each radial section
+
+"
+function writeAirfoilIndex(filename, filepath, r, contours, polars, Rtip, Rhub; addHubTip = false)
+    if r[1] < Rhub; throw("radial station requested beyond hub"); end
+    if r[end] > Rtip; throw("radial station requested beyond tip"); end
+    if addHubTip # add sections on the hub and tip 
+        if r[1] > Rhub; r = vcat(Rhub, r); contours = vcat(contours[1], contours); polars = vcat(polars[1], polars); end
+        if r[end] < Rtip; r = vcat(r, Rtip); contours = vcat(contours, contours[end]); polars = vcat(polars, polars[end]); end
+    end
+
+    rR = r ./ Rtip
+    rRscaled = scale01(rR) # scale from 0 to 1, consistent with FLOWUnsteady protocol
+
+    open(joinpath(filepath, filename), "w") do io
+        println(io, "r/R,Contour file,Aero file")
+        writedlm(io, [rRscaled contours polars], ',')
+    end
+end
+
+"Writes an airfoil coefficient file provided the aerodynamic coefficient values."
+function writeAirfoilPolar(filename, filepath, alpha, cl, cd, cm;
+    Re = nothing, airfoilname = nothing, M = nothing, maxclcd = nothing, maxclcdalpha = nothing
+    )
+    # todo: allow the user to specify these 
+    cdp = zeros(length(alpha))
+    Top_Xtr = zeros(length(alpha))
+    Bot_Xtr = zeros(length(alpha))
+
+    open(joinpath(filepath, filename), "w") do io
+        print(io, "XFOIL & experimental polar
+        Polar key
+        Airfoil,$airfoilname
+        Reynolds number,$Re
+        Ncrit
+        Mach,$M
+        Max Cl/Cd,$maxclcd
+        Max Cl/Cd alpha,$maxclcdalpha
+        
+        
+        Alpha,Cl,Cd,Cdp,Cm,Top_Xtr,Bot_Xtr)\n")
+        writedlm(io, [alpha cl cd cdp cm Top_Xtr Bot_Xtr], ',')
+    end
+end
+
+"Input:
+
+* `rR::Vector` : a vector of radial position measured with respect to the center
+
+Modified input:
+
+* `rR::Vector` : transformed such that the first element is 0 and the last element is 1.0"
+function scale01(rR)
+    subtractme = rR[1]
+    scaleme = (rR[end] - subtractme) ^ -1.0
+    return (rR - subtractme) * scaleme
+end
+
+"""
+Uses XFOIL to create a polar object without viterna extrapolation or 3D correction.
+
+Inputs:
+
+* pathtocontour : path to the airfoil contour file
+
+Optional input:
+
+* `verbose::Bool` : toggles vervose output 
+
+"""
+function getPyPolar(pathtocontour, Re, Mach; verbose = true)
+    data = readdlm(pathtocontour, ',' , Float64, '\n'; skipstart=1)
+    x = data[:,1]; y = data[:,2]
+    polar = vlm.ap.runXFOIL(x, y, Re;
+            alphas=[i for i in -30:1.0:30],
+            verbose=verbose, Mach=Mach,
+            iter=200, alpha_ite=10)
+    
+    return polar
+end
+
+"""
+Filters the contents of a `vlm.ap.Polar.pyPolar` object to contain only non-stalled aoas. Fills the init_ values of the new polar based on the pyPolar object
+
+Returns:
+
+* `nostalledPolar::vlm.ap.Polar`
+
+"""
+function nostallPolar(polar::vlm.ap.Polar)
+    # find index of cl = 0
+    i0 = nothing
+    for (i, cl) in enumerate(polar.pyPolar[:cl])
+        if cl >= 0
+            i0 = i
+            break
+        end
+    end
+    # find index of alpha_clmax
+    imaxcl = nothing
+    cl_prev = polar.pyPolar[:cl][i0-1]
+    for i = i0:length(polar.pyPolar[:alpha])
+        cl = polar.pyPolar[:cl][i]
+        if cl < cl_prev
+            imaxcl = i
+            break
+        end
+        cl_prev = cl
+    end
+    # find index of alpha_clmin
+    imincl = nothing
+    cl_prev = polar.pyPolar[:cl][i0+1]
+    for i = i0:1
+        cl = polar.pyPolar[:cl][i]
+        if cl > cl_prev
+            imincl = i
+            break
+        end
+        cl_prev = cl
+    end
+
+    newalphas = polar.pyPolar[:alpha][imincl:imaxcl]
+    newcls = polar.pyPolar[:cl][imincl:imaxcl]
+    newcds = polar.pyPolar[:cd][imincl:imaxcl]
+    newcms = polar.pyPolar[:cm][imincl:imaxcl]
+    newpolar = vlm.ap.Polar(polar.init_Re, newalphas, newcls, newcds, newcms, polar.x, polar.y)
+
+    return newpolar
+end
+
+# """
+
+# * `extrapolate3D::Tuple{Real,Real}` : tuple containing nondimensional radial location of the airfoil and CDmax; if `nothing`, extrapolation is not performed
+# * `viterna::Bool` : toggles 360 degree viterna extrapolation
+# * `targetname::String` : name of the target file; defaults to the contour name and reynolds number separated by a dash
+# """
+# function writePolar(pathtocontour, RPM, rotorR, rR; toggleextrapolate3D::Bool = false, toggleviterna::Bool = false, verbose = true, asound = 343.0, nu = 1.48e-5, cdmax = 1.3)
+#     vtip = RPM * 2*pi/60 * rotorR * rR 
+#     Retip = vtip * 2 * rotorR / nu
+#     Relocal = Retip * rR 
+#     M = vtip / asound
+#     extrapolate3D = toggleextrapolate3D ? (rR, cdmax) : nothing
+#     targetname = splitext(splitdir(pathtocontour)[2])[1] * "-" * string(ceil(Relocal)) * ".csv"
+# end
+
+function writePolar(polar::vlm.ap.Polar, pathtotarget::String, airfoilname::String, Re, Ncrit, M)
+    open(pathtotarget, "w") do io
+        print(io, 
+        "XFOIL & experimental polar
+        Polar key
+        Airfoil,$airfoilname
+        Reynolds number,$Re
+        Ncrit,$Ncrit
+        Mach,$M
+        Max Cl/Cd
+        Max Cl/Cd alpha
+        
+        
+        Alpha,Cl,Cd,Cdp,Cm,Top_Xtr,Bot_Xtr\n")
+        z = zeros(length(polar.pyPolar[:alpha]))
+        writedlm(io,[polar.pyPolar[:alpha] polar.pyPolar[:cl] polar.pyPolar[:cd] z polar.pyPolar[:cm] z z], ",")
+    end
+end
+
+"Returns a dictionary with the fields:
+
+* mus : a vector of the mean value `datafield`
+* sigmas : a vector of the standard deviation of the mean value `datafield` 
+
+"
+function getstatistics(data::Dict, datafield::String, runnames::Array{String,1}, tsconverged::Array{Int64,1}; qvlm = false)
+    # bug patch
+    "angles" in keys(data[runnames[1]]) ? anglekey = "angles" : anglekey = "angels"
+    mus = zeros(length(runnames))
+    sigmas = zeros(length(runnames))
+    for (i, runname) in enumerate(runnames)
+        endi = getend(data[runname][anglekey]; zerotolerance = 1e-3)
+        if qvlm
+            mus[i] = data[runname][datafield][endi-1]
+            sigmas[i] = 0.0
+        else
+            mus[i] = mean(data[runname][datafield][tsconverged[i]:endi])
+            sigmas[i] = std(data[runname][datafield][tsconverged[i]:endi])
+        end
+    end
+
+    stats = Dict()
+    stats["mus"] = mus
+    stats["sigmas"] = sigmas
+    
+    return stats
+end
+
+function getend(anglearray::Union{Array{T,1}, Array{T,2}} where T; zerotolerance = 1e-3)
+    endi = 0
+    for i=1:length(anglearray)
+        if i > 1 && ( anglearray[i] < zerotolerance || isnan(anglearray[i]) )
+            endi = i-1
+            return endi
+        end
+    end
+    return length(anglearray)
+end
+
 end # module
